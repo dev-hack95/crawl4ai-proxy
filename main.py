@@ -70,11 +70,6 @@ async def get_cached(url: str) -> Optional[str]:
             if row is None:
                 return None
 
-            age = (datetime.now(timezone.utc) - row["crawl_timestamp"]).total_seconds()
-            if age > CACHE_TTL_SECONDS:
-                logger.info(f"Cache stale for {url} (age {age:.0f}s > {CACHE_TTL_SECONDS}s)")
-                return None
-
             await cur.execute(
                 """
                 UPDATE crawler_data SET last_accessed = now() WHERE url_hash = %s AND content_type = %s
@@ -92,7 +87,7 @@ async def upsert_cache(url: str, content: str) -> None:
             await cur.execute(
                 """
                 INSERT INTO crawler_data (url, url_hash, content_type, data, crawl_timestamp, last_updated, last_accessed, created_at)
-                VALUES (%s, %s, %s, %s, now(), now(), now(), now()) ON CONFLICT (url_hash) DO UPDATE SET data = EXCLUDED.data, crawl_timestamp = now(), last_updated = now(), last_accessed = now()
+                VALUES (%s, %s, %s, %s, now(), now(), now(), now()) ON CONFLICT (url_hash) DO UPDATE SET crawl_timestamp = now(), last_updated = now(), last_accessed = now()
                 """,
                 (url, url_hash, CONTENT_TYPE, content),
             )
@@ -109,7 +104,6 @@ async def fetch_url(url: str, client: httpx.AsyncClient) -> dict:
                 "metadata": {"source": url, "cached": True},
             }
 
-        # Try filter=fit first (strips nav, ads, sign-in prompts)
         resp = await client.post(
             CRAWL4AI_URL,
             json={"url": url, "filter": "fit"},
@@ -118,7 +112,6 @@ async def fetch_url(url: str, client: httpx.AsyncClient) -> dict:
         data = resp.json()
         content = data.get("markdown", "")
 
-        # Fallback: if filter=fit stripped too much, retry without filter
         if len(content) < 100:
             logger.info(f"Fallback: {url} returned only {len(content)} chars with filter=fit, retrying raw")
             resp = await client.post(
