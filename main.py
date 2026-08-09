@@ -101,7 +101,7 @@ async def fetch_url(url: str, client: httpx.AsyncClient) -> dict:
             logger.info(f"Cache hit for {url}: {len(cached)} chars")
             return {
                 "page_content": cached,
-                "metadata": {"source": url, "cached": True},
+                "metadata": {"source": url},
             }
 
         resp = await client.post(
@@ -130,7 +130,7 @@ async def fetch_url(url: str, client: httpx.AsyncClient) -> dict:
 
         return {
             "page_content": content,
-            "metadata": {"source": url, "cached": False},
+            "metadata": {"source": url},
         }
     except Exception as e:
         logger.error(f"Error fetching {url}: {e}")
